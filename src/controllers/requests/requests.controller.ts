@@ -1,7 +1,7 @@
 import { https } from "follow-redirects";
 import url from "url";
 import { Request, Response } from "express";
-import axios from "axios";
+import * as prettier from "prettier";
 
 // Make request and response for front
 export const requests = async (req: Request, res: Response) => {
@@ -27,12 +27,21 @@ export const requests = async (req: Request, res: Response) => {
       chunks.push(chunk);
     });
 
-    response.on("end", function (chunk: any) {
-      var body = Buffer.concat(chunks);
-      // console.log(body.toString());
+    response.on("end", async function () {
+      const time = new Date().getTime() - startTime;
+      var body: any = Buffer.concat(chunks);
+      body = body.toString();
+      if (body.toString().indexOf("<!doctype") === 0) {
+        body = await prettier.format(body, { parser: "html" });
+      } else if (validJson(body)) {
+        body = await prettier.format(body, {
+          parser: "json-stringify",
+        });
+      }
       res.send({
-        content: body.toString(),
-        elapsed: new Date().getTime() - startTime,
+        content: body.substring(0, body.length - 1),
+        contentLength: body.length,
+        elapsed: time,
         headers: response.headers,
         statusCode: response.statusCode,
       });
@@ -47,4 +56,16 @@ export const requests = async (req: Request, res: Response) => {
     request.write(body.data);
   }
   request.end();
+};
+
+const validJson = (text: any) => {
+  if (typeof text !== "string") {
+    return false;
+  }
+  try {
+    JSON.parse(text);
+    return true;
+  } catch (error) {
+    return false;
+  }
 };
